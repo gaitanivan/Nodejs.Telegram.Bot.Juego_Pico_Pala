@@ -54,6 +54,35 @@ El objetivo es adivinar un **número secreto de 3 dígitos sin repetir**:
   * `dotenv` (Gestión de variables de entorno ^17.4.2)
   * `fs` (Persistencia nativa de datos en JSON)
 
+## ⚙️ Configuración e Instalación
+
+Si deseas clonar y ejecutar este bot en tu propio entorno local o servidor:
+
+0. **Requisito previo:** Tener instalado **[Node.js](https://nodejs.org/)** (v20 o superior recomendada).
+
+1. **Clonar el repositorio:**
+   ```bash
+   git clone https://github.com/gaitanivan/Nodejs.Telegram.Bot.Juego_Pico_Pala.git
+   cd Nodejs.Telegram.Bot.Juego_Pico_Pala
+   ```
+
+2. **Instalar dependencias:**
+   ```bash
+   npm install
+   ```
+
+3. **Configurar variables de entorno:**
+   * Haz una copia del archivo `.env.example` y renómbralo a `.env`.
+   * Abre el archivo `.env` y coloca el token de tu bot generado mediante **@BotFather** en Telegram:
+     ```env
+     PICO_PALA_BOT_TOKEN=tu_token_aqui
+     ```
+
+4. **Iniciar el bot:** *(Asegúrate de estar ubicado en la raíz del proyecto)*:
+   ```bash
+   node index.js
+   ```
+
 ## ⚖️ Licencia y Atribuciones
 Este proyecto se distribuye bajo la licencia **MIT**. 
 Para más detalles sobre las dependencias y paquetes de terceros utilizados por Node.js y Telegraf, consulta el archivo `package.json`.
