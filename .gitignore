@@ -1,0 +1,17 @@
+# Dependencias de Node.js
+node_modules/
+
+# Archivo de variables de entorno (Contiene el TOKEN secreto del Bot)
+.env
+
+# Archivo local de persistencia de partidas/sesiones
+sesiones.json
+
+# Archivos de registro / logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Archivos del sistema operativo
+.DS_Store
+Thumbs.db
