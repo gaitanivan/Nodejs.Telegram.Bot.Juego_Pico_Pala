@@ -5,6 +5,7 @@ import fs from 'fs';
 import { generarNumeroSecreto, calcularPicosYPalas } from './juego.js';
 import { 
   registrarUsuario, 
+  eliminarUsuario,
   setBuscandoRivales, 
   isBuscandoRivales, 
   establecerFiltro,
@@ -30,7 +31,11 @@ if (!process.env.PICO_PALA_BOT_TOKEN) {
   process.exit(1);
 }
 
-const bot = new Telegraf(process.env.PICO_PALA_BOT_TOKEN);
+const bot = new Telegraf(process.env.PICO_PALA_BOT_TOKEN, {
+  telegram: {
+    timeout: 60000
+  }
+});
 const SESIONES_FILE = './sesiones.json';
 const retosPendientes = {}; 
 
@@ -57,6 +62,17 @@ function guardarSesiones() {
 
 const partidasActivas = cargarSesiones();
 
+// --- EVENTO: USUARIO BLOQUEA O DETIENE EL BOT ---
+bot.on('my_chat_member', (ctx) => {
+  const newStatus = ctx.myChatMember?.new_chat_member?.status;
+  const userId = ctx.from.id;
+
+  if (newStatus === 'kicked') {
+    console.log(`[EVENTO] El usuario ${userId} bloqueó o detuvo el bot. Procediendo a eliminar sus datos.`);
+    eliminarUsuario(userId, partidasActivas, guardarSesiones);
+  }
+});
+
 async function procesarAbandonoOInicio(ctx, chatId) {
   const partida = partidasActivas[chatId];
   if (partida && partida.rivalId) {
@@ -80,7 +96,11 @@ async function procesarAbandonoOInicio(ctx, chatId) {
         null,
         `💬 *MENSAJES Y ESTADO*\n\nℹ️ *${nombreActual}* ha vuelto al menú inicio.\nSelecciona una opción para continuar:`,
         { parse_mode: 'Markdown', ...obtenerBotonesInicio(rivalId) }
-      ).catch(() => {});
+      ).catch((err) => {
+        if (err.response && err.response.error_code === 403) {
+          eliminarUsuario(rivalId, partidasActivas, guardarSesiones);
+        }
+      });
     }
   }
 
@@ -150,8 +170,6 @@ async function iniciarPartidaPvp(ctx, retadorId, rivalId) {
   const numeroDeA = generarNumeroSecreto();
   const numeroDeB = generarNumeroSecreto();
 
-  // Detección de desventaja/ventaja por revancha:
-  // Si el perdedor anterior de la partida fue B, B inicia. De lo contrario (o por defecto), A inicia.
   let turnoParaA = true;
   let turnoParaB = false;
 
@@ -188,10 +206,13 @@ async function iniciarPartidaPvp(ctx, retadorId, rivalId) {
   const nombreA = usuarioA ? usuarioA.first_name : "Jugador A";
   const nombreB = usuarioB ? usuarioB.first_name : "Jugador B";
 
-  await ctx.telegram.editMessageText(retadorId, partidaA.tablaMessageId, null, obtenerTextoTablero(nombreB, numeroDeA, [], true), { parse_mode: 'Markdown' }).catch(() => {});
-  await ctx.telegram.editMessageText(rivalId, partidaB.tablaMessageId, null, obtenerTextoTablero(nombreA, numeroDeB, [], true), { parse_mode: 'Markdown' }).catch(() => {});
+  await ctx.telegram.editMessageText(retadorId, partidaA.tablaMessageId, null, obtenerTextoTablero(nombreB, numeroDeA, [], true), { parse_mode: 'Markdown' }).catch((err) => {
+    if (err.response && err.response.error_code === 403) eliminarUsuario(retadorId, partidasActivas, guardarSesiones);
+  });
+  await ctx.telegram.editMessageText(rivalId, partidaB.tablaMessageId, null, obtenerTextoTablero(nombreA, numeroDeB, [], true), { parse_mode: 'Markdown' }).catch((err) => {
+    if (err.response && err.response.error_code === 403) eliminarUsuario(rivalId, partidasActivas, guardarSesiones);
+  });
 
-  // Notificación adaptada según a quién le tocó iniciar
   const primerJugadorId = turnoParaA ? retadorId : rivalId;
   const segundoJugadorId = turnoParaA ? rivalId : retadorId;
 
@@ -204,7 +225,9 @@ async function iniciarPartidaPvp(ctx, retadorId, rivalId) {
     null,
     `💬 *MENSAJES Y ESTADO*\n\n🟢 *¡Es tu turno!* (Tiras primero). Escribe un número de 3 dígitos sin repetir para adivinar el de ${nombreSegundoJugador}.`,
     { parse_mode: 'Markdown', ...Markup.inlineKeyboard([[Markup.button.callback('❌ Rendirse', 'cancelar_partida_pvp')]]) }
-  ).catch(() => {});
+  ).catch((err) => {
+    if (err.response && err.response.error_code === 403) eliminarUsuario(primerJugadorId, partidasActivas, guardarSesiones);
+  });
 
   await ctx.telegram.editMessageText(
     segundoJugadorId,
@@ -212,7 +235,9 @@ async function iniciarPartidaPvp(ctx, retadorId, rivalId) {
     null,
     `💬 *MENSAJES Y ESTADO*\n\n⏳ Turno de *${nombrePrimerJugador}*. Esperando su movimiento...`,
     { parse_mode: 'Markdown', ...Markup.inlineKeyboard([[Markup.button.callback('❌ Rendirse', 'cancelar_partida_pvp')]]) }
-  ).catch(() => {});
+  ).catch((err) => {
+    if (err.response && err.response.error_code === 403) eliminarUsuario(segundoJugadorId, partidasActivas, guardarSesiones);
+  });
 }
 
 // --- COMANDOS Y INICIO ---
@@ -364,7 +389,13 @@ bot.action(/^retar_usuario:(\d+)$/, async (ctx) => {
           [Markup.button.callback('🚫 Bloquear Jugador', `bloquear_desde_reto:${chatId}`)]
         ])
       }
-    ).catch(err => console.log(err.message));
+    ).catch(err => {
+      if (err.response && err.response.error_code === 403) {
+        eliminarUsuario(rivalId, partidasActivas, guardarSesiones);
+      } else {
+        console.log(err.message);
+      }
+    });
 
     retosPendientes[rivalId] = {
       retadorId: chatId,
@@ -387,7 +418,9 @@ bot.action(/^cancelar_reto_enviado:(\d+)$/, async (ctx) => {
       null,
       `💬 *MENSAJES Y ESTADO*\n\n🚫 El reto pendiente fue cancelado por el otro jugador.`,
       { parse_mode: 'Markdown', ...obtenerBotonesInicio(rivalId) }
-    ).catch(() => {});
+    ).catch((err) => {
+      if (err.response && err.response.error_code === 403) eliminarUsuario(rivalId, partidasActivas, guardarSesiones);
+    });
 
     delete retosPendientes[rivalId];
   }
@@ -420,7 +453,13 @@ bot.action(/^rechazar_reto:(\d+)$/, async (ctx) => {
         null,
         `💬 *MENSAJES Y ESTADO*\n\n❌ El jugador rechazó tu invitación.\n\n¿Quieres buscar a otro rival?`,
         { parse_mode: 'Markdown', ...generarTecladoRivales(retadorId, partidasActivas, 0).teclado }
-      ).catch(err => console.log(err));
+      ).catch(err => {
+        if (err.response && err.response.error_code === 403) {
+          eliminarUsuario(retadorId, partidasActivas, guardarSesiones);
+        } else {
+          console.log(err);
+        }
+      });
     }
 
     delete retosPendientes[chatId];
@@ -452,7 +491,13 @@ bot.action(/^bloquear_desde_reto:(\d+)$/, async (ctx) => {
         null,
         `💬 *MENSAJES Y ESTADO*\n\n❌ El reto no se pudo concretar porque el usuario ya no está disponible.`,
         { parse_mode: 'Markdown', ...generarTecladoRivales(retadorId, partidasActivas, 0).teclado }
-      ).catch(err => console.log(err));
+      ).catch(err => {
+        if (err.response && err.response.error_code === 403) {
+          eliminarUsuario(retadorId, partidasActivas, guardarSesiones);
+        } else {
+          console.log(err);
+        }
+      });
     }
 
     delete retosPendientes[chatId];
@@ -590,7 +635,9 @@ bot.action('cancelar_partida_pvp', async (ctx) => {
         null,
         `🏆 *¡GANASTE POR ABANDONO!* 🏆\n\n*${nombreActual}* se ha rendido.\nSu número secreto era: *${partidaRival.numeroSecretoRival}*.`,
         { parse_mode: 'Markdown', ...obtenerBotonesInicio(rivalId) }
-      ).catch(() => {});
+      ).catch((err) => {
+        if (err.response && err.response.error_code === 403) eliminarUsuario(rivalId, partidasActivas, guardarSesiones);
+      });
     }
   }
 });
@@ -664,7 +711,6 @@ bot.on('text', async (ctx) => {
         delete partida.quiereVolverAJugar;
         delete partidaRival.quiereVolverAJugar;
 
-        // Registrar el perdedor de esta partida (el rival, al que le adivinaron el número)
         partida.ultimoPerdedorId = rivalId;
         partidaRival.ultimoPerdedorId = rivalId;
         
@@ -684,7 +730,9 @@ bot.on('text', async (ctx) => {
           null, 
           `💔 *FIN DE LA PARTIDA*\n\n*${nombreActual}* adivinó tu número (*${partidaRival.miNumeroSecreto}*) en *${intentosTotales}* intentos.`, 
           { parse_mode: 'Markdown', ...obtenerBotonesFinPvp(chatId, nombreActual) }
-        ).catch(() => {});
+        ).catch((err) => {
+          if (err.response && err.response.error_code === 403) eliminarUsuario(rivalId, partidasActivas, guardarSesiones);
+        });
 
         return;
       }
@@ -694,7 +742,9 @@ bot.on('text', async (ctx) => {
       guardarSesiones();
 
       await ctx.telegram.editMessageText(chatId, partida.feedbackMessageId, null, `💬 *MENSAJES Y ESTADO*\n\nProcesado intento: *${texto}* (Picos: ${resultado.picos}, Palas: ${resultado.palas}).\n\n⏳ Turno de *${nombreRival}*...`, { parse_mode: 'Markdown', ...Markup.inlineKeyboard([[Markup.button.callback('❌ Rendirse', 'cancelar_partida_pvp')]]) }).catch(() => {});
-      await ctx.telegram.editMessageText(rivalId, partidaRival.feedbackMessageId, null, `💬 *MENSAJES Y ESTADO*\n\n📢 *${nombreActual}* jugó: *${texto}* (Picos: ${resultado.picos}, Palas: ${resultado.palas}).\n\n🟢 *¡Es tu turno!*`, { parse_mode: 'Markdown', ...Markup.inlineKeyboard([[Markup.button.callback('❌ Rendirse', 'cancelar_partida_pvp')]]) }).catch(() => {});
+      await ctx.telegram.editMessageText(rivalId, partidaRival.feedbackMessageId, null, `💬 *MENSAJES Y ESTADO*\n\n📢 *${nombreActual}* jugó: *${texto}* (Picos: ${resultado.picos}, Palas: ${resultado.palas}).\n\n🟢 *¡Es tu turno!*`, { parse_mode: 'Markdown', ...Markup.inlineKeyboard([[Markup.button.callback('❌ Rendirse', 'cancelar_partida_pvp')]]) }).catch((err) => {
+        if (err.response && err.response.error_code === 403) eliminarUsuario(rivalId, partidasActivas, guardarSesiones);
+      });
 
     } else {
       await ctx.telegram.editMessageText(chatId, partida.tablaMessageId, null, obtenerTextoTablero(null, null, partida.intentos, false), { parse_mode: 'Markdown' }).catch(() => {});
@@ -715,11 +765,7 @@ bot.on('text', async (ctx) => {
   }
 });
 
-bot.launch({
-	polling: {
-		timeout: 60
-	}
-}).then(() => console.log("🚀 Bot listo...")).catch(err => console.error(err));
+bot.launch().then(() => console.log("🚀 Bot listo...")).catch(err => console.error(err));
 
 process.once('SIGINT', () => bot.stop('SIGINT'));
 process.once('SIGTERM', () => bot.stop('SIGTERM'));

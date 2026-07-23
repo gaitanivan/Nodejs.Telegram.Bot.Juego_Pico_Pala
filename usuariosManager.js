@@ -34,6 +34,31 @@ export function registrarUsuario(ctx) {
   }
 }
 
+export function eliminarUsuario(chatId, partidasActivas = {}, guardarSesiones = null) {
+  const idStr = chatId.toString();
+  const idNum = parseInt(chatId);
+
+  if (registroUsuarios[idStr]) {
+    delete registroUsuarios[idStr];
+    console.log(`[USER] Usuario eliminado de registros: ${idStr}`);
+
+    // Limpiar de la lista de bloqueados de otros usuarios
+    Object.values(registroUsuarios).forEach(usuario => {
+      if (usuario.bloqueados) {
+        usuario.bloqueados = usuario.bloqueados.filter(bId => bId !== idNum);
+      }
+    });
+  }
+
+  // Si el usuario tenía partida o sesión activa, la eliminamos
+  if (partidasActivas && partidasActivas[idStr]) {
+    delete partidasActivas[idStr];
+    if (typeof guardarSesiones === 'function') {
+      guardarSesiones();
+    }
+  }
+}
+
 function obtenerUsuariosElegibles(solicitanteId, partidasActivas) {
   const solicitante = registroUsuarios[solicitanteId.toString()];
   const filtro = solicitante && solicitante.filtroBusqueda ? limpiarAcentos(solicitante.filtroBusqueda) : "";
