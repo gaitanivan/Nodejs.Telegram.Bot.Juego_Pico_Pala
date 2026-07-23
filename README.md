@@ -1,6 +1,6 @@
-# Nodejs.Telegram.Bot.Juego_Pico_Pala 🎮🐂
+# Nodejs.Telegram.Bot.Juego-Pico-Pala 🎮🐂
 
-**Nodejs.Telegram.Bot.Juego_Pico_Pala** es un bot interactivo de Telegram desarrollado en **Node.js** que implementa el clásico juego de lógica y deducción **Pico y Pala**.
+**Nodejs.Telegram.Bot.Juego-Pico-Pala** es un bot interactivo de Telegram desarrollado en **Node.js** que implementa el clásico juego de lógica y deducción **Pico y Pala**.
 
 ## 🎮 ¡Pruébalo en vivo!
 Puedes jugar directamente en Telegram buscando el bot o haciendo clic en el siguiente enlace:
@@ -62,8 +62,8 @@ Si deseas clonar y ejecutar este bot en tu propio entorno local o servidor:
 
 1. **Clonar el repositorio:**
    ```bash
-   git clone https://github.com/gaitanivan/Nodejs.Telegram.Bot.Juego_Pico_Pala.git
-   cd Nodejs.Telegram.Bot.Juego_Pico_Pala
+   git clone https://github.com/gaitanivan/Nodejs.Telegram.Bot.Juego-Pico-Pala.git
+   cd Nodejs.Telegram.Bot.Juego-Pico-Pala
    ```
 
 2. **Instalar dependencias:**
